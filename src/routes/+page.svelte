@@ -14,9 +14,9 @@
   let images: Array<ViewImage> = [];
 
   onMount(async () => {
-    $isLoading = true;
     const login = await hasSession();
     if (login) {
+      $isLoading = true;
       images = await getAllPosts();
       // console.log(images);
       $isLoading = false;
