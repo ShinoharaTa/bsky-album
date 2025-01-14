@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getProfile, logout } from "../lib/script/bsky";
-  import { Avatar } from "@skeletonlabs/skeleton";
-  import { popup } from "@skeletonlabs/skeleton";
-  import type { PopupSettings } from "@skeletonlabs/skeleton";
+  import { bluesky } from "../lib/script/bsky";
+  import { Avatar } from "@skeletonlabs/skeleton-svelte";
+  // import { popup } from "@skeletonlabs/skeleton-svelte";
+  // import type { PopupSettings } from "@skeletonlabs/skeleton-svelte";
 
-  let isLoaded: boolean = false;
+  let isLoaded = false;
   let icon: string | null = null;
   onMount(async () => {
-    const profile = await getProfile();
+    const profile = await bluesky.getProfile();
     if (profile) {
       icon = profile.avatar ?? null;
     }
@@ -16,23 +16,23 @@
   });
 
   function clickLogout() {
-    logout();
+    bluesky.logout();
     return;
   }
 
-  const popupClick: PopupSettings = {
-    event: "click",
-    target: "popupClick",
-    placement: "top",
-  };
+  // const popupClick: PopupSettings = {
+  //   event: "click",
+  //   target: "popupClick",
+  //   placement: "top",
+  // };
 </script>
 
 {#if isLoaded}
-  <button use:popup={popupClick}>
-    <Avatar src={icon ?? ``} width="w-12" rounded="rounded-full" />
-  </button>
+  <Avatar name="icon" src={icon ?? ``} size="16" rounded="rounded-full" />
+  <!-- <button use:popup={popupClick}>
+  </button> -->
 {:else}
-  <Avatar src="" width="w-12" rounded="rounded-full" />
+  <Avatar name="icon" src="" size="16" rounded="rounded-full" />
 {/if}
 <div class="card p-4" data-popup="popupClick">
   <div>

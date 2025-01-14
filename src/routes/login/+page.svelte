@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { login } from "../../lib/script/bsky";
-  import { isLoading } from "../../stores/Album";
+import { goto } from "$app/navigation";
+import { bluesky } from "../../lib/script/bsky";
+import { isLoading } from "../../stores/Album";
 
-  let username = "";
-  let password = "";
-  let message: string = "";
+let username = "";
+let password = "";
+let message = "";
 
-  async function handleLogin(): Promise<void> {
-    try {
-      $isLoading = true;
-      await login(username, password);
-      $isLoading = false;
-      goto("/");
-    } catch (error: any) {
-      $isLoading = false;
-      message = error;
-    }
-  }
+async function handleLogin(): Promise<void> {
+	// try {
+	$isLoading = true;
+	await bluesky.login(username, password);
+	$isLoading = false;
+	goto("/");
+	// } catch (ex) {
+	//   $isLoading = false;
+	//   message = ex.message;
+	// }
+}
 </script>
 
 <div class="max-width mx-auto">
@@ -56,9 +56,3 @@
     </div>
   </form>
 </div>
-
-<style>
-  .max-width {
-    max-width: 400px;
-  }
-</style>
