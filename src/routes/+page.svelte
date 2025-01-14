@@ -29,7 +29,7 @@ onMount(async () => {
   <!-- <h1>投稿フォーム</h1> -->
   <div class="flex justify-between items-center">
     <h1 class="h2">Bsky-Album</h1>
-    <div>
+    <div class="flex justify-between items-center">
       <UserField />
     </div>
   </div>

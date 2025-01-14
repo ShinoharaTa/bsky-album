@@ -122,14 +122,11 @@ export class Bluesky {
   }
 
   async getProfile() {
-    if (browser) {
-      try {
-        const { data } = await this.agent.getProfile();
-        return data;
-      } catch {
-        return null;
-      }
-    }
+    if (!browser) return;
+    const handle = this.agent.session?.handle
+    if (!handle) return;
+    const { data } = await this.agent.getProfile({actor: handle});
+    return data;
   }
 
   // // APIリクエストのためのメソッドを追加
