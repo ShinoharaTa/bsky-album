@@ -129,70 +129,41 @@ export class Bluesky {
     return data;
   }
 
-  // // APIリクエストのためのメソッドを追加
-  // getAgent(): AtpAgent {
-  //   return this.agent
-  // }
-
-  // フォローしているユーザーの投稿を取得
-  async getFollowingFeed(limit = 50) {
-    try {
-      const response = await this.agent.getTimeline({
-        limit: limit
-      })
-      return response.data.feed
-    } catch (error) {
-      console.error('Feed error:', error)
-      throw error
+  async getAllPosts(cursor: string | null = null, maxRecursiveCalls = 1): Promise<Array<any>> {
+    if (maxRecursiveCalls < 0) {
+      throw new Error('Max recursion limit reached');
     }
+    if (browser) {
+      try {
+        const did = this.agent.session?.did
+        if (!did) return [];
+            const params: AppBskyFeedGetAuthorFeed.QueryParams = { actor: did, limit: 100, filter: "posts_with_media" };
+        if (cursor) {
+          params.cursor = cursor;
+        }
+        const data: AppBskyFeedGetAuthorFeed.Response = await this.agent.getAuthorFeed(params);
+        console.log(data)
+        const filterdFeed = data.data.feed
+          .filter(item => {
+            return (
+              item.post.embed?.$type === "app.bsky.embed.images#view"
+            )
+          })
+          .flatMap(item => {
+            if (item.post.embed?.$type === "app.bsky.embed.images#view") {
+              return item.post.embed?.images
+            }
+          })
+        return filterdFeed;
+
+      } catch (error) {
+        console.error(error);
+        return [];
+      }
+    }
+    return [];
   }
+
 }
 
 export const bluesky = new Bluesky()
-
-// export async function getAllPosts(cursor: string | null = null, maxRecursiveCalls: number = 30): Promise<Array<any>> {
-//   if (maxRecursiveCalls < 0) {
-//     throw new Error('Max recursion limit reached');
-//   }
-//   if (browser) {
-//     try {
-//       const params: { actor: string; limit: number; cursor?: string } = { actor: self.handle, limit: 100 };
-//       if (cursor) {
-//         params.cursor = cursor;
-//       }
-
-//       const data: AppBskyFeedGetAuthorFeed.Response = await agent.getAuthorFeed(params);
-
-//       const filterdFeed = data.data.feed
-//         .filter(item => !item.reason)
-//         .filter(item => {
-//           return (
-//             item.post.embed?.$type === "app.bsky.embed.images#view"
-//             // || item.post.embed?.$type === "app.bsky.embed.recordWithMedia#view"
-//           )
-//         })
-//         .map(item => {
-//           if (item.post.embed?.$type === "app.bsky.embed.images#view") {
-//             return item.post.embed?.images
-//           }
-//           // if (item.post.embed?.$type === "app.bsky.embed.recordWithMedia#view") {
-//           //   // @ts-ignore
-//           //   return item.post.embed?.media?.images
-//           // }
-//         })
-//         .flat()
-
-//       if (data.data.cursor) {
-//         const nextData = await getAllPosts(data.data.cursor, maxRecursiveCalls - 1);
-//         return filterdFeed.concat(nextData);
-//       } else {
-//         return filterdFeed;
-//       }
-
-//     } catch (error) {
-//       console.error(error);
-//       return [];
-//     }
-//   }
-//   return [];
-// }

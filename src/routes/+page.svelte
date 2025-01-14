@@ -14,11 +14,10 @@ let isLoaded = false;
 let images: Array<ViewImage> = [];
 
 onMount(async () => {
-	const login = bluesky.checkSession();
+  const login = bluesky.checkSession();
 	if (login) {
 		$isLoading = true;
-		// images = await getAllPosts();
-		// console.log(images);
+		images = await bluesky.getAllPosts();
 		$isLoading = false;
 		isLoaded = true;
 	}
