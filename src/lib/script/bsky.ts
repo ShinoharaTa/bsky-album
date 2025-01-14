@@ -2,115 +2,168 @@
 import { browser } from "$app/environment";
 import { goto } from "$app/navigation";
 
-import { BskyAgent } from "@atproto/api";
+import {AtpAgent} from "@atproto/api";
 import type { AtpSessionData, AppBskyFeedGetAuthorFeed } from "@atproto/api";
 import { setMessage } from "../../stores/Album";
+import { writable, type Writable } from 'svelte/store'
 
-let self: any;
-const agent = new BskyAgent({
-  service: "https://bsky.social",
-  persistSession: (evt, sess) => {
-    localStorage.setItem("sess", JSON.stringify(sess));
-  },
-});
-
-export async function login(username: string, password: string): Promise<void> {
-  if (browser) {
-    self = await agent.login({
-      identifier: username,
-      password: password,
-    });
-    return;
-  }
+export interface SessionState {
+  isLoggedIn: boolean
+  handle?: string
+  error?: string
 }
 
-export async function hasSession(): Promise<boolean> {
-  if (browser) {
-    let session = localStorage.getItem("sess") ?? null;
-    if (!session) {
-      localStorage.removeItem("sess");
-      self = null;
-      setMessage("Please Login.");
-      goto("/login");
-      return false;
-    }
+export class Bluesky {
+  private agent: AtpAgent
+  public sessionStore: Writable<SessionState>
+  private initializationPromise: Promise<boolean>
+
+  constructor() {
+    this.agent = new AtpAgent({
+      service: 'https://bsky.social',
+      persistSession: (evt, sess) => {
+        if(evt === "create" || evt === "update"){
+          localStorage.setItem('bsky-session', JSON.stringify(sess))
+        }
+        else {
+          this.logout();
+        }
+      }
+    })
+
+    this.sessionStore = writable({
+      isLoggedIn: false
+    })
+    this.initializationPromise = this.initializeSession()
+  }
+
+  private async initializeSession(): Promise<boolean> {
+    if (!browser) return false
+
     try {
-      let sess: AtpSessionData = JSON.parse(session);
-      const { data } = await agent.resumeSession(sess);
-      self = data;
-    } catch {
-      self = null;
-      setMessage("Please Login.");
-      goto("/login");
-      return false;
-    }
-    return true;
-  }
-  return false;
-}
-
-export function logout(): void {
-  if (browser) {
-    localStorage.removeItem("sess");
-    self = null;
-    goto("/login");
-  }
-}
-
-export async function getProfile() {
-  if (browser) {
-    try {
-      const { data } = await agent.getProfile({ actor: self.handle });
-      return data;
-    } catch {
-      return null;
-    }
-  }
-}
-
-export async function getAllPosts(cursor: string | null = null, maxRecursiveCalls: number = 30): Promise<Array<any>> {
-  if (maxRecursiveCalls < 0) {
-    throw new Error('Max recursion limit reached');
-  }
-  if (browser) {
-    try {
-      const params: { actor: string; limit: number; cursor?: string } = { actor: self.handle, limit: 100 };
-      if (cursor) {
-        params.cursor = cursor;
+      const savedSession = localStorage.getItem('bsky-session')
+      if (!savedSession) {
+        setMessage("Please Login.");
+        goto("/login");
+        return false
       }
 
-      const data: AppBskyFeedGetAuthorFeed.Response = await agent.getAuthorFeed(params);
+      const session = JSON.parse(savedSession) as AtpSessionData
+      await this.agent.resumeSession(session)
 
-      const filterdFeed = data.data.feed
-        .filter(item => !item.reason)
-        .filter(item => {
-          return (
-            item.post.embed?.$type === "app.bsky.embed.images#view"
-            // || item.post.embed?.$type === "app.bsky.embed.recordWithMedia#view"
-          )
-        })
-        .map(item => {
-          if (item.post.embed?.$type === "app.bsky.embed.images#view") {
-            return item.post.embed?.images
-          }
-          // if (item.post.embed?.$type === "app.bsky.embed.recordWithMedia#view") {
-          //   // @ts-ignore
-          //   return item.post.embed?.media?.images
-          // }
-        })
-        .flat()
+      this.sessionStore.set({
+        isLoggedIn: true,
+        handle: this.agent.session?.handle
+      })
 
-      if (data.data.cursor) {
-        const nextData = await getAllPosts(data.data.cursor, maxRecursiveCalls - 1);
-        return filterdFeed.concat(nextData);
-      } else {
-        return filterdFeed;
-      }
-
+      return true
     } catch (error) {
-      console.error(error);
-      return [];
+      console.error('Session initialization error:', error)
+      localStorage.removeItem('bsky-session')
+
+      this.sessionStore.set({
+        isLoggedIn: false,
+        error: error instanceof Error ? error.message : 'Session initialization failed'
+      })
+
+      setMessage("Please Login.");
+      goto("/login");
+      return false
     }
   }
-  return [];
+
+  async login(identifier: string, password: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.agent.login({
+        identifier,
+        password
+      })
+
+      this.sessionStore.set({
+        isLoggedIn: true,
+        handle: this.agent.session?.handle
+      })
+
+      return { success: true }
+    } catch (error) {
+      console.error('Login error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Login failed'
+
+      this.sessionStore.set({
+        isLoggedIn: false,
+        error: errorMessage
+      })
+
+      return {
+        success: false,
+        error: errorMessage
+      }
+    }
+  }
+
+  async logout() {
+    if (!browser) return
+    try {
+      localStorage.removeItem('bsky-session')
+      await this.agent.logout()
+      this.sessionStore.set({
+        isLoggedIn: false
+      })
+      setMessage("Please Login.");
+      goto("/login");
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
+
+  checkSession(): boolean {
+    if (!browser) return true;
+    return this.agent.session !== null
+  }
+
+  async getProfile() {
+    if (!browser) return;
+    const handle = this.agent.session?.handle
+    if (!handle) return;
+    const { data } = await this.agent.getProfile({actor: handle});
+    return data;
+  }
+
+  async getAllPosts(cursor: string | null = null, maxRecursiveCalls = 1): Promise<Array<any>> {
+    if (maxRecursiveCalls < 0) {
+      throw new Error('Max recursion limit reached');
+    }
+    if (browser) {
+      try {
+        const did = this.agent.session?.did
+        if (!did) return [];
+            const params: AppBskyFeedGetAuthorFeed.QueryParams = { actor: did, limit: 100, filter: "posts_with_media" };
+        if (cursor) {
+          params.cursor = cursor;
+        }
+        const data: AppBskyFeedGetAuthorFeed.Response = await this.agent.getAuthorFeed(params);
+        console.log(data)
+        const filterdFeed = data.data.feed
+          .filter(item => {
+            return (
+              item.post.embed?.$type === "app.bsky.embed.images#view"
+            )
+          })
+          .flatMap(item => {
+            if (item.post.embed?.$type === "app.bsky.embed.images#view") {
+              return item.post.embed?.images
+            }
+          })
+        return filterdFeed;
+
+      } catch (error) {
+        console.error(error);
+        return [];
+      }
+    }
+    return [];
+  }
+
 }
+
+export const bluesky = new Bluesky()
